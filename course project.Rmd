@@ -1,0 +1,108 @@
+---
+title: "Machine Learning Course Project"
+author: "Tom Cecere"
+date: "June 20, 2015"
+output: html_document
+---
+
+```{r, echo=FALSE}
+## Load data and pre-process 
+##Load data
+pmltest<-read.csv("pml-testing.csv")
+pmltrainfull<-read.csv("pml-training.csv")
+pmltrainclasse<-pmltrainfull$classe
+
+##First 7 columns are not useful in prediction
+pmltrain<-pmltrainfull[,-ncol(pmltrainfull)]
+pmltrain<-pmltrain[,-(1:7)]
+pmltest<-pmltest[,-(1:7)]
+
+library(caret); library(knitr)
+```
+
+
+### Executive Summary
+The Machine Learning course project assignment required the examination of accelerometer data for 6 weight lifters to determine whether they were exercizing "correctly", as defined by the authors of the web site  http://groupware.les.inf.puc-rio.br/har.
+
+The best model I created was one where I first preprocessed the data with Principal Components and then used a Random Forest approach. This resulted in a high accuracy (97%) and low OOB error estimate (2.52%).
+
+#### The Data
+The loaded data comes with a training file of 'r nrows(pmltrainfull)' observations of 'r ncol(pmltrainfull)' variables. Many of these variables are of no predictive value, either because of their nature (names, time stamps) but also due to the extremely high percentage of NAs. I removed the first 7 columns and then also removed all columns where more than 99% of the entries were "NA"'s.
+
+```{r, echo=FALSE}
+##Retain columns where at least 1% of entries are not NA
+colfewNAs<-colSums(is.na(pmltrain))< 192
+pmltrain<-pmltrain[,colfewNAs]
+pmltest<-pmltest[,colfewNAs]
+```
+
+This reduces the number of variables from 'r ncol(pmltrainfull)' to 'r ncol(pmltrain)'. Next I wanted to examine the data for correlations. I would expect many of these variables to be extremely highly correlated. Figure 1 shows a sample of an 8x8 "FeaturePlot" from the Caret package. It's easy to see how correlated this initial set are from the picture:
+
+
+```{r, echo=FALSE}
+featurePlot(x=pmltrain[,1:8],
+            y = pmltrainclasse,
+            plot="pairs")  ##We can see lots of correlation
+print("Figure 1: Plot of first 8 variables against Classe")
+```
+
+With the warning from the plots, I chose to eliminate columns where the correlation was greater than .90. 
+
+```{r, echo=FALSE}
+##Now take out columns that are highly correlated (over .9)
+pmltraincorr<-pmltrain
+for (i in 1:ncol(pmltrain)) pmltraincorr[,i]<-as.numeric(pmltrain[,i])
+descrCorr <- cor(pmltraincorr)
+highCorr <- findCorrelation(descrCorr, cutoff=.90, verbose = FALSE)
+pmltrain <- pmltrain[, -highCorr]
+pmltraincorr<-pmltraincorr[, -highCorr]
+pmltest <- pmltest[, -highCorr]
+```
+
+This operation leaves us with 'r ncol(pmltest)' variables. This is the set I chose to preprocess with PCA in preparation for trying various models.
+
+```{r, echo=FALSE, cache=TRUE}
+##Preprocess using Principal components
+preProc <- preProcess(pmltraincorr, method="pca")
+trainPC <- predict(preProc,pmltraincorr)
+modelFit <- train(pmltrainclasse ~ .,method="rf",data=trainPC)
+
+##Make a test set wtihout the last column (question number), and then set
+##all the NA's to 0 to make the Principal Components method work
+pmltest2<-pmltest[,1:64]
+pmltest2[is.na(pmltest2)] <-0
+```
+
+
+####Models
+
+I first ran a simple tree model using "rpart" in the caret package. This was remarkably inaccurate, although it ran quite fast. The accuracy estimate was only 3 percent, and it did not even predict one of the classes. I chose to run 2 more sophisticated algorithms, one a random forest, and the other (called AdaBag) which both baggs and boosts the data.
+
+Figure 2 shows the results from the random forest model, and Figure 3 shows the "final model" output, demonstrating the accuracy for each of the classes. This model took over an hour to run on my Windows 7 laptop with an i5 processor and 6GB of memory. It was consistently using 75% or more of my physical RAM, indicating that the laptop was working at full capacity.
+
+```{r, echo=FALSE}
+modelFit
+print("Figure 2: Results of Random Forest model on PCA preprocessed data")
+```
+
+
+```{r, echo=FALSE}
+modelFit$finalModel
+print("Figure 3: $Final.Model for Random Forest") 
+```
+
+The "AdaBag" model was also quite compute intensive on the preprocessed data, taking 45 minutes to run. Its accuracy was not as high as the random forest (xx%), so I proceeded to use the random forest model on the test data despite the danger of overfitting.
+
+
+####Prediction
+
+The prediction aspect of the model was quite quick, but the PCA transformation did not deal well with the NAs in the test set. I replaced NAs with zeros in the test set so that the PCs could be calculated.
+
+```{r, echo=FALSE}
+testpc <- predict(preProc, pmltest2)
+
+testpred<-predict(modelFit,newdata=testpc)
+rfpredictions <- cbind(pmltest$problem_id, testpred)
+kable(rfpredictions, caption = "Classe predictions for each of the 20 test cases")
+```
+
