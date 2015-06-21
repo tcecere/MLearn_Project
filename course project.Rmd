@@ -80,6 +80,8 @@ I first ran a simple tree model using "rpart" in the caret package. This was rem
 
 Figure 2 shows the results from the random forest model, and Figure 3 shows the "final model" output, demonstrating the accuracy for each of the classes. This model took over an hour to run on my Windows 7 laptop with an i5 processor and 6GB of memory. It was consistently using 75% or more of my physical RAM, indicating that the laptop was working at full capacity.
 
+The random forest algorithm handles resampling (I used the default of 25) and cross-validation. As you will see, the OOB error estimate is a small 2.5%, indicating a very tightly fit model.
+
 ```{r, echo=FALSE}
 modelFit
 print("Figure 2: Results of Random Forest model on PCA preprocessed data")
@@ -106,3 +108,7 @@ rfpredictions <- cbind(pmltest$problem_id, testpred)
 kable(rfpredictions, caption = "Classe predictions for each of the 20 test cases")
 ```
 
+The AdaBag model was not nearly as successful; it had an accuracy of 44%, doing 25 reps of Bootstrapped resampling.
+
+####Citation:
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
